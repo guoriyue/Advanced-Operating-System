@@ -26,6 +26,9 @@ If we make it a ENTRY routine, it will require a lock on the monitor to execute.
 Thus, it can potentially cause a deadlock.
 Because we already acquired the monitor lock in EXPAND, and in ALLOCATE, we also need to acquire the monitor lock, since the lock is already acquired, we will get a deadlock.
 
+Also, it may cause memory fragmentation because as a entry routinue, it will be called by other procedures, and it will be called multiple times.
+Thus the memory will be fragmented into small and non-contiguous chunks, making it difficult to find a large enough block of memory to satisfy a new allocation request.
+
 ### What happens if we make the WAIT call just put the current thread at the end of the run queue?
 
 This doesn't make sense because the thread in the run queue should be the one that is ready to run, not the one that is waiting for a condition to be true.
