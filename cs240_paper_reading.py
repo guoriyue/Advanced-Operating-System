@@ -1,39 +1,38 @@
-### Explain from the Mesa paper: “… while any procedure suitable for forking can also be called sequentially, the converse is not generally true.”
+#### State what the point of section 5.1 is. Then state in what way Figure 3 undercuts the entire point of Section 5.1.
+Section 5.1 shows all kinds of synchonization approaches, including mutex, spinlock, and update synchronization (e.g. volatile, cmpxchg), are more expensive than the non-synchronized version.
 
-The converse is that any sequentially called procedure is also suitable for forking.
-Actually, not every sequentially called procedure is suitable for forking, because when forking, one parent process creates a child process which runs the same program.
-Sequentially called procedures may run different programs so they are not generally suitable for forking.
+However, Figure 3 shows that the update version is faster than the non-synchronized version, which undercuts the point of Section 5.1.
+I think this is just a specific case on a specific hardware.
+Generally, synchronized version is more expensive than the non-synchronized version.
 
-### Consider the memory allocation code in the Mesa paper.
+#### As suggested in class, you define the semantics of a volatile variable v as giving two guarantees: (i) no additional loads or stores can be done to v other than what appear in the program text, and (ii) an access to v cannot be reordered with any other volatile access or lock call. Which problems (if any) in Section 4 would this fix?
+I think it would fix the concurrent modification problem and the rewriting of adjacent data problem. 
+Because the volatile variable can cannot be reordered, so it ensures that all modifications to v are serialized and atomic, and there is no concurrent modification.
+Also, the load and stores of v are load and stores that appear in the program text, the compiler cannot compile into some other adjacent fields, so it ensures that there is no concurrency problem of adjacent data.
 
-### The paper states this code has a bug. What is it and what is the fix?
+#### You see the following code below, Eraser said this “double-check lock” idiom is tricky because of memory consistency. Assume the hardware is sequentially consistent and Boehm fixed the compiler to not be stupid about locks (describe your interpretation of what this means). Does this code break? Why or why not?
 
-It is possible that a process is waiting even though there is now enough free memory available to satisfy its request.
-If there are multiple processes waiting on this condition, only one of them will be woken up and allocate the newly available block of memory.
-The fix is replace NOTIFY with BROADCAST.
-This will wake up all processes waiting on the moreAvailable condition, giving all of them the chance to acquire the monitor lock and allocate memory from the newly available block.
+```c
+if (!p) {
+    lock();
+    if (!p) {
+        struct foo *t = foo_new();
+        t->bar = bar_new();
+        p = t;
+    }
+    unlock();
+}
+```
 
-### Intuitively, how would you change this code to work with Hoare wakeup semantics?
+When multiple threads attempt to access p, a thread may observe that p is uninitialized and proceed to acquire the lock, while another thread may observe that p is initialized and skip the lock acquisition.
+This can result in one thread initializing p while another thread proceeds to use an uninitialized version of p.
 
-The while loop checks help processes to continue wait if they fail to acquire the monitor lock when BROADCAST.
-If we want to change this code to work with Hoare wakeup semantics, we still need a loop to make sure that the process continues to wait if it fails to acquire the monitor lock.
-So that we can add a while loop outside of the wakeup statement to make sure that the process continues to wait if it fails to acquire the monitor lock.
+Here, being stupid about locks means that the compiler does not set appropriate memory barriers, and may reorder memory operations across the lock boundary.
+Because lock is implemented as a library, which is not visible to the compiler, so the compiler cannot know that the lock is a synchronization point, and it cannot insert the appropriate memory barriers.
 
-### What happens if we make EXPAND an ENTRY routine?
-
-Now EXPAND is a PUBLIC procedure, it doesn't require do not require a lock on the monitor to execute and doesn't modify shared variables.
-If we make it a ENTRY routine, it will require a lock on the monitor to execute.
-Thus, it can potentially cause a deadlock.
-Because we already acquired the monitor lock in EXPAND, and in ALLOCATE, we also need to acquire the monitor lock, since the lock is already acquired, we will get a deadlock.
-
-Also, it may cause memory fragmentation because as a entry routinue, it will be called by other procedures, and it will be called multiple times.
-Thus the memory will be fragmented into small and non-contiguous chunks, making it difficult to find a large enough block of memory to satisfy a new allocation request.
-
-### What happens if we make the WAIT call just put the current thread at the end of the run queue?
-
-This doesn't make sense because the thread in the run queue should be the one that is ready to run, not the one that is waiting for a condition to be true.
-Thus, the thread will not wait for the condition to be true and the WAIT call will not work.
-
-### Give the main monitor invariant for this code.
-
-Mutual Exclusion. At most one process can execute Allocation or Free at any time.
+If Boehm fixed the compiler to not be stupid about locks, the compiler will insert appropriate memory barriers before the lock.
+So if p is uninitialized, all threads will wait before the lock, then one thread successfully acquires the lock and initializes p.
+Then, this thread will wait before the unlock.
+All other threads will acquire the lock and see that p is initialized, and skip the lock.
+Finally, all threads come to the memory barrier before the unlock, and finish the critical section.
+Therefore, the code will not break.
