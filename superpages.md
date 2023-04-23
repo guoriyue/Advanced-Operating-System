@@ -30,3 +30,12 @@ Not:
 It makes makes preemption simple and reduces possible contention.
 However, mesa shows a small performance degradation because buddy allocator does not differentiate zeroed-out pages from other free pages.
 When the OS allocates a page that needs to be subsequently zeroed out, it requests the memory allocator to preferentially allocate an already zeroed-out page if possible.
+
+
+
+
+
+
+
+
+
